@@ -21,6 +21,9 @@ project(FastNetMon)
 # Get convinient paths for all system folders: http://www.cmake.org/gitweb?p=cmake.git;a=commitdiff;h=a262fe09
 # include(GNUInstallDirs)
 
+include(CheckCXXCompilerFlag)
+include(CheckLibraryExists)
+
 # Enable it and fix all warnigns!
 # add_definitions ("-Wall")
 
@@ -96,6 +99,29 @@ execute_process(COMMAND git rev-list HEAD COMMAND head -n 1 OUTPUT_VARIABLE GIT_
 
 set(FASTNETMON_APPLICATION_VERSION "1.1.3 master git-${GIT_LAST_COMMIT_HASH}")
 configure_file(fast_platform.h.template "${PROJECT_SOURCE_DIR}/fast_platform.h")
+
+# Use new Memory Model Aware Atomic Operations
+# You could enable it using: cmake .. -DUSE_NEW_ATOMIC_BUILTINS=ON
+if (USE_NEW_ATOMIC_BUILTINS)
+    message(STATUS "Will use new memory model aware atomic builtins")
+    add_definitions(-DUSE_NEW_ATOMIC_BUILTINS) 
+endif() 
+
+CHECK_CXX_SOURCE_COMPILES("
+#include <cstdint>
+int main() {
+    uint64_t x = 1;
+    __atomic_add_fetch(&x, 0, __ATOMIC_RELAXED);
+    return x;
+}
+" HAVE__ATOMIC_ADD_FETCH)
+
+if (NOT HAVE__ATOMIC_ADD_FETCH)
+    check_library_exists(atomic __atomic_add_fetch_8 "" HAVE_LIBATOMIC)
+    if (HAVE_LIBATOMIC)
+        target_link_libraries(fastnetmon atomic)
+    endif()
+endif()
 
 # With this flag we can disable PF_RING build via console: cmake .. -DDISABLE_PF_RING_SUPPORT=ON
 if (NOT DISABLE_PF_RING_SUPPORT) 
