@@ -97,7 +97,7 @@ add_executable(fastnetmon fastnetmon.cpp)
 # Get last commit hash
 execute_process(COMMAND git rev-list HEAD COMMAND head -n 1 OUTPUT_VARIABLE GIT_LAST_COMMIT_HASH OUTPUT_STRIP_TRAILING_WHITESPACE)
 
-set(FASTNETMON_APPLICATION_VERSION "1.1.3 master git-${GIT_LAST_COMMIT_HASH}")
+set(FASTNETMON_APPLICATION_VERSION "1.1.4 master git-${GIT_LAST_COMMIT_HASH}")
 configure_file(fast_platform.h.template "${PROJECT_SOURCE_DIR}/fast_platform.h")
 
 # Use new Memory Model Aware Atomic Operations
@@ -133,10 +133,7 @@ if (NOT DISABLE_PF_RING_SUPPORT)
     endif() 
 endif()
 
-# With this flag we could disable Netmap build this way: cmake .. -DDISABLE_NETMAP_SUPPORT=ON
-if (NOT DISABLE_NETMAP_SUPPORT)
-    set (ENABLE_NETMAP_SUPPORT ON)
-endif()
+option(ENABLE_NETMAP_SUPPORT "Enable Netmap support" ON)
 
 if (ENABLE_NETMAP_SUPPORT)
     message(STATUS "We will build Netmap support for you")
@@ -230,7 +227,7 @@ add_library(sflow_plugin STATIC sflow_plugin/sflow_collector.cpp)
 add_library(netflow_plugin STATIC netflow_plugin/netflow_collector.cpp)
 target_link_libraries(netflow_plugin ipfix_rfc)
 
-set(ENABLE_DPI_SUPPORT YES)
+option(ENABLE_DPI_SUPPORT "Enable Deep Packet Inspection support" ON)
 if (ENABLE_DPI_SUPPORT) 
     message(STATUS "We will enable nDPI support")
 
@@ -255,7 +252,7 @@ endif()
 # We do not enable it by default, it's testing feature
 # If you want it please build with:
 # cmake -DENABLE_LUA_SUPPORT=ON .. 
-set(ENABLE_LUA_SUPPORT yes CACHE BOOL "Enable Lua support")
+option(ENABLE_LUA_SUPPORT "Enable Lua support" ON)
 if (ENABLE_LUA_SUPPORT)
     message(STATUS "We will enable LuaJIT support")
 
@@ -663,8 +660,10 @@ install(FILES man/fastnetmon.1 DESTINATION /usr/share/man/man1)
 install(FILES man/fastnetmon_client.1 DESTINATION /usr/share/man/man1)
 
 # service files
-configure_file(fastnetmon.service.in "${CMAKE_CURRENT_BINARY_DIR}/fastnetmon.service" @ONLY)
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/fastnetmon.service" DESTINATION ${CMAKE_INSTALL_SYSTEMD_SERVICEDIR})
+if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+    configure_file(fastnetmon.service.in "${CMAKE_CURRENT_BINARY_DIR}/fastnetmon.service" @ONLY)
+    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/fastnetmon.service" DESTINATION ${CMAKE_INSTALL_SYSTEMD_SERVICEDIR})
+endif()
 
 if (${OS_ID} MATCHES debian|ubuntu)
 install(FILES fastnetmon_init_script_debian_6_7 DESTINATION ${CMAKE_INSTALL_SYSCONFDIR}/init.d RENAME fastnetmon)

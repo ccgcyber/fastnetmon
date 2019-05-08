@@ -31,7 +31,7 @@ my $install_log_path = '/tmp/fastnetmon_install.log';
 # But we have some patches for NTP and DNS protocols here
 my $ndpi_repository = 'https://github.com/pavel-odintsov/nDPI.git';
 
-my $stable_branch_name = 'v1.1.3';
+my $stable_branch_name = 'v1.1.4';
 my $we_use_code_from_master = '';
 
 # By default use mirror
@@ -128,15 +128,19 @@ sub welcome_message {
     print " version with big number of improvements: ";
 
     print color('bold cyan');
-    print "https://fastnetmon.com/fastnetmon-advanced/\n\n";
+    print "https://fastnetmon.com/fastnetmon-advanced/?utm_source=community_install_script&utm_medium=email\n\n";
     print color('reset');
 
     print "You could order free one-month trial for Advanced version here ";
     print color('bold cyan');
-    print "https://fastnetmon.com/trial/\n\n";
+    print "https://fastnetmon.com/trial/?utm_source=community_install_script&utm_medium=email\n\n";
     print color('reset');
 
-    print "In case of any issues with install script please use https://github.com/pavel-odintsov/fastnetmon to report them\n\n";
+    print "In case of any issues with install script please use ";
+    print color('bold cyan');
+    print "https://fastnetmon.com/contact/?utm_source=community_install_script&utm_medium=email";
+    print color('reset');
+    print " to report them\n\n";
 }
 
 sub get_logical_cpus_number {
@@ -178,7 +182,8 @@ sub get_user_email {
     do {
         print "\n";
         print "Please provide your business email address to receive important information about security updates\n";
-        print "In addition, we could send promotional messages to this email (very rare)\n";
+        print "In addition, we can send promotional messages to this email (very rare)\n";
+        print "You can find our privacy policy here https://fastnetmon.com/privacy-policy/\n";
         print "We will provide an option to disable any email from us\n";
         print "We will not share your email with any third party companies.\n\n";
         print "If you continue install process you accept our subscription rules automatically\n\n";
@@ -737,6 +742,11 @@ sub install_json_c {
     } else { 
         exec_command("sed -i '355 s#^#//#' json_tokener.c");
         exec_command("sed -i '360 s#^#//#' json_tokener.c");
+        
+        # Workaround complaints from fresh compilers
+        if ($distro_type eq 'ubuntu' && $distro_version eq '18.04') {
+            exec_command("sed -i -e '381 s/AM_CFLAGS =/AM_CFLAGS = -Wimplicit-fallthrough=0/ ' Makefile.in");
+        }
     }
 
     print "Build it\n";
