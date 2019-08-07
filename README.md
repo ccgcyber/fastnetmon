@@ -2,7 +2,7 @@
 
 Community Edition
 ===========
-FastNetMon - A high performance DoS/DDoS load analyzer built on top of multiple packet capture engines (NetFlow, IPFIX, sFlow, SnabbSwitch, netmap, PF_RING, PCAP).
+FastNetMon - A high performance DoS/DDoS load analyzer built on top of multiple packet capture engines (NetFlow, IPFIX, sFlow, AF_PACKET, SnabbSwitch, netmap, PF_RING (obsoleted), PCAP).
 
 What do we do?
 --------------
@@ -28,12 +28,16 @@ Official [mirror at GitLab](https://gitlab.com/fastnetmon/fastnetmon)
 Project 
 -------
 - [Official site](https://fastnetmon.com)
-- [Mailing list](https://groups.google.com/forum/#!forum/fastnetmon)
-- [Slack](https://join.slack.com/t/fastnetmon/shared_invite/MjM3NDUwNzY4NjA5LTE1MDQ4MzE5NTAtYmU4MjYyYWNiZQ)
 - [FastNetMon Advanced, Commercial Edition](https://fastnetmon.com/fastnetmon-advanced/)
 - [FastNetMon Advanced and Community difference table](https://fastnetmon.com/compare-community-and-advanced/)
-- Chat: #fastnetmon at irc.freenode.net [web client](https://webchat.freenode.net/)
 - Detailed reference in Russian: [link](https://fastnetmon.com/wp-content/uploads/2017/07/FastNetMon_Reference_Russian.pdf)
+
+Official support groups:
+-------
+- [Mailing list](https://groups.google.com/forum/#!forum/fastnetmon)
+- [Slack](https://join.slack.com/t/fastnetmon/shared_invite/MjM3NDUwNzY4NjA5LTE1MDQ4MzE5NTAtYmU4MjYyYWNiZQ)
+- IRC: #fastnetmon at irc.freenode.net [web client](https://webchat.freenode.net/)
+- Telegram: [fastnetmon](https://t.me/fastnetmon)
 
 Follow us at social media:
 -------
@@ -45,8 +49,12 @@ Supported packet capture engines
 --------------------------------
 - NetFlow v5, v9
 - IPFIX
-- ![sFlow](http://sflow.org/images/sflowlogo.gif) v4 (since 1.1.3), v5
-- Port mirror/SPAN capture with PF_RING (with ZC/DNA mode support [need license](http://www.ntop.org/products/pf_ring/)), SnabbSwitch, NETMAP and PCAP
+- ![sFlow](http://sflow.org/images/sflowlogo.gif) v4, v5
+- PCAP
+- AF_PACKET
+- Netmap
+- SnabbSwitch (experimental) 
+- PF_RING / PF_RING ZC (obsoleted, not recommented, please use AF_PACKET instead) 
 
 You can check out the [comparison table](https://fastnetmon.com/docs/capture_backends/) for all available packet capture engines.
 
@@ -85,9 +93,8 @@ Features
 Running Fastnetmon
 ------------------
 ### Supported platforms
-- Linux (Debian 6/7/8/9, CentOS 6/7, Ubuntu 12.04, 14.04, 16.04)
-- FreeBSD 9, 10, 11: [official port](https://www.freshports.org/net-mgmt/fastnetmon/).
-- Mac OS X Yosemite (only 1.1.2 release)
+- Linux (Debian, CentOS, Ubuntu)
+- FreeBSD: [official port](https://www.freshports.org/net-mgmt/fastnetmon/).
 
 ### Supported architectures
 - x86 64-bit (recommended)

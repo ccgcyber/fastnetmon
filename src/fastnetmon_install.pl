@@ -6,7 +6,59 @@ use warnings;
 use Getopt::Long;
 use File::Basename;
 
-use Term::ANSIColor;
+my $have_ansi_color = '';
+
+# We should handle cases when customer does not have perl modules package installed
+BEGIN {
+    unless (eval "use Term::ANSIColor") {
+        warn "Cannot load module Term::ANSIColor";
+    }
+
+    $have_ansi_color = 1;
+}
+
+my $we_use_code_from_master = '';
+
+my $os_type = '';
+my $distro_type = '';  
+my $distro_version = '';  
+my $distro_architecture = '';
+
+my $user_email = '';
+
+my $install_log_path = "/tmp/fastnetmon_install_$$.log";
+
+# So, you could disable this option but without this feature we could not improve FastNetMon for your distribution
+my $do_not_track_me = '';
+
+sub send_tracking_information {
+    my $step = shift;
+
+    unless ($do_not_track_me) {
+        my $stats_url = "http://178.62.227.110/new_fastnetmon_installation";
+        my $post_data = "distro_type=$distro_type&os_type=$os_type&distro_version=$distro_version&distro_architecture=$distro_architecture&step=$step&we_use_code_from_master=$we_use_code_from_master&user_email=$user_email";
+        my $user_agent = 'FastNetMon install tracker v1';
+
+        `wget --post-data="$post_data" --user-agent="$user_agent" -q '$stats_url'`;
+    } 
+}
+
+
+# die wrapper to send message to tracking server
+sub fast_die {
+    my $message = shift;
+
+	# Report failed installs
+	send_tracking_information("error");
+
+    # Send detailed report about issue to Sentry
+    unless ($do_not_track_me) {
+        system("SENTRY_DSN=https://121eca215532431cb7521eafdbca23d3:292cfd7ac2af46a7bc32356141e62592\@sentry.io/1504559 /opt/sentry-cli " .
+            " send-event -m \"$message\" --logfile $install_log_path");
+    }
+
+    die "$message Please share $install_log_path with FastNetMon team at GitHub to get help: https://github.com/pavel-odintsov/fastnetmon/issues/new\n";
+}
 
 my $pf_ring_version = '6.0.3';
 my $pf_ring_url = "https://github.com/ntop/PF_RING/archive/v$pf_ring_version.tar.gz";
@@ -18,39 +70,26 @@ my $temp_folder_for_building_project = `mktemp -d /tmp/fastnetmon.build.dir.XXXX
 chomp $temp_folder_for_building_project;
 
 unless ($temp_folder_for_building_project && -e $temp_folder_for_building_project) {
-    die "Can't create temp folder in /tmp for building project: $temp_folder_for_building_project\n";
+    fast_die("Can't create temp folder in /tmp for building project: $temp_folder_for_building_project");
 }
 
 my $start_time = time();
 
 my $fastnetmon_code_dir = "$temp_folder_for_building_project/fastnetmon/src";
 
-my $install_log_path = '/tmp/fastnetmon_install.log';
-
 # Official mirror: https://github.com/ntop/nDPI.git
 # But we have some patches for NTP and DNS protocols here
 my $ndpi_repository = 'https://github.com/pavel-odintsov/nDPI.git';
 
 my $stable_branch_name = 'v1.1.4';
-my $we_use_code_from_master = '';
 
 # By default use mirror
 my $use_mirror = 1;
 
 my $mirror_url = 'https://github.com/pavel-odintsov/fastnetmon_dependencies/raw/master/files'; 
 
-my $os_type = '';
-my $distro_type = ''; 
-my $distro_version = ''; 
-my $distro_architecture = '';
-
-my $user_email = '';
-
 # Used for VyOS and different appliances based on rpm/deb
 my $appliance_name = ''; 
-
-# So, you could disable this option but without this feature we could not improve FastNetMon for your distribution
-my $do_not_track_me = '';
 
 my $cpus_number = 1;
 
@@ -62,20 +101,12 @@ my $configure_options = '';
 
 welcome_message();
 
-# We will build gcc, stdc++ and boost for this distribution from sources
-my $build_binary_environment = '';
-
-# With this option we could build full binary package
-my $create_binary_bundle = '';
-
 my $use_modern_pf_ring = '';
 
 # Get options from command line
 GetOptions(
     'use-git-master' => \$we_use_code_from_master,
     'do-not-track-me' => \$do_not_track_me,
-    'build-binary-environment' => \$build_binary_environment,
-    'create-binary-bundle' => \$create_binary_bundle,
     'use-modern-pf-ring' => \$use_modern_pf_ring,
 );
 
@@ -87,7 +118,7 @@ if ($use_modern_pf_ring) {
 }
 
 my $we_have_ndpi_support = '1';
-my $we_have_luajit_support = '1';
+my $we_have_luajit_support = '';
 my $we_have_hiredis_support = '1';
 my $we_have_log4cpp_support = '1';
 my $we_have_pfring_support = '';
@@ -108,38 +139,45 @@ if ($enable_gobgp_backend) {
 
 main();
 
+# Applies colors to terminal if we have this module
+sub fast_color {
+    if ($have_ansi_color) {
+        color(@_);
+    }
+}
+
 sub welcome_message {
     # Clear screen
     print "\033[2J";
     # Jump to 0.0 position
     print "\033[0;0H";
 
-    print color('bold green');
+    print fast_color('bold green');
     print "Hi there!\n\n";
-    print color('reset');
+    print fast_color('reset');
     
     print "We need about ten minutes of your time for installing FastNetMon toolkit\n\n";
     print "Also, we have ";
 
-    print color('bold cyan');
+    print fast_color('bold cyan');
     print "FastNetMon Advanced";
-    print color('reset');
+    print fast_color('reset');
 
     print " version with big number of improvements: ";
 
-    print color('bold cyan');
+    print fast_color('bold cyan');
     print "https://fastnetmon.com/fastnetmon-advanced/?utm_source=community_install_script&utm_medium=email\n\n";
-    print color('reset');
+    print fast_color('reset');
 
     print "You could order free one-month trial for Advanced version here ";
-    print color('bold cyan');
+    print fast_color('bold cyan');
     print "https://fastnetmon.com/trial/?utm_source=community_install_script&utm_medium=email\n\n";
-    print color('reset');
+    print fast_color('reset');
 
     print "In case of any issues with install script please use ";
-    print color('bold cyan');
+    print fast_color('bold cyan');
     print "https://fastnetmon.com/contact/?utm_source=community_install_script&utm_medium=email";
-    print color('reset');
+    print fast_color('reset');
     print " to report them\n\n";
 }
 
@@ -203,23 +241,55 @@ sub get_user_email {
     print "\nThank you so much!\n\n"; 
 }
 
+# Installs Sentry for error tracking
+sub install_sentry {
+    my $machine_arch = `uname -m`;
+    chomp $machine_arch;
+
+    my $download_res = system("wget --quiet 'https://downloads.sentry-cdn.com/sentry-cli/1.46.0/sentry-cli-Linux-$machine_arch' -O/opt/sentry-cli");
+
+    if ($download_res != 0) {
+        warn "Cannot download Sentry";
+    }
+
+    system("chmod +x /opt/sentry-cli");
+}
+
 ### Functions start here
 sub main {
+    # Open log file
+    open my $global_log, ">", $install_log_path;
+    print {$global_log} "Install started";
+
     detect_distribution();
 
     get_user_email();
 
+    # Set environment variables to collect more information about installation failures
+
+    $ENV{'FASTNETMON_DISTRO_TYPE'} = $distro_type;
+    $ENV{'FASTNETMON_DISTRO_VERSION'} = $distro_version;
+    $ENV{'FASTNETMON_USER'} = $user_email;
+
+    install_sentry();
+
     $cpus_number = get_logical_cpus_number();
 
     # We could get huge speed benefits with this option
-    if ($cpus_number > 1) { 
-        print "You have really nice server with $cpus_number CPU's and we will use them all for build process :)\n";
+    if ($cpus_number > 8) {
+        print "You have really nice server with $cpus_number CPUs and we will use them all for build process :)\n";
         $make_options = "-j $cpus_number";
     }
 
-    # We have PF_RING only for Linux
+    # We use PF_RING only for very old Linux distros, all new one should use AF_PACKET
     if ($os_type eq 'linux') {
-        $we_have_pfring_support = 1;
+        if ($distro_type eq 'ubuntu' && $distro_version =~ m/^12\.04/) {
+            $we_have_pfring_support = 1;
+        }
+
+        if ($distro_type eq 'centos' && $distro_version == 6) {
+            $we_have_pfring_support = 1;
+        }
     }
 
     if ($os_type eq 'macosx') {
@@ -239,11 +309,56 @@ sub main {
 
     send_tracking_information('started');
 
-    if ($build_binary_environment) {
-        install_gcc();
-        install_boost_builder();
-        install_boost();
+    my $install_from_official_distro = '';
+
+    # For these Ubuntu version we have FastNetMon in standard repos, will use it instead
+    if ($distro_type eq 'ubuntu' && (
+        $distro_version =~ m/^18\.04/ or
+        $distro_version =~ m/^19\.04/)) {
+
+         $install_from_official_distro = 1;
     }
+
+    # For Debian 9 we also have FastNetMon in standard repos
+    if ($distro_type eq 'debian' && $distro_version =~ m/^10\.0/) {
+        $install_from_official_distro = 1;
+    }
+
+    if ($install_from_official_distro) {
+        apt_get("fastnetmon");
+
+        # Switch off sflow and netflow plugins enabled by default
+        system("sed -i 's/sflow = on/sflow = off/' /etc/fastnetmon.conf");
+        system("sed -i 's/netflow = on/netflow = off/' /etc/fastnetmon.conf");
+        # Remove trailing space in Debian/Ubuntu configuration, it was fixed in upstream
+        system("sed -i 's/ban_for_tcp_pps = off /ban_for_tcp_pps = off/' /etc/fastnetmon.conf");
+
+        # Apply changes
+        system("systemctl restart fastnetmon");
+
+        print "FastNetMon was installed and started correctly\n";
+        print "Below you can find some useful commands and paths\n\n";
+        print "Main configuration file: /etc/fastnetmon.conf\n";
+        print "Daemon restart command: systemctl restart fastnetmon\n";
+        print "Client tool: fastnetmon_client\n";
+        print "Log file: /var/log/fastnetmon.log\n";
+
+        send_tracking_information('finished');
+        exit(0);
+    }
+
+
+    # Install standard tools for building packages
+    if ($distro_type eq 'debian' or $distro_type eq 'ubuntu') {
+        my @debian_packages_for_build = ('build-essential', 'make', 'tar', 'wget');
+
+        apt_get(@debian_packages_for_build);
+    } elsif ($distro_type eq 'centos') {
+        my @centos_dependency_packages = ('make', 'gcc', 'gcc-c++');
+
+        yum(@centos_dependency_packages);
+    }
+
 
     if ($we_have_pfring_support) {
         install_pf_ring();
@@ -292,60 +407,10 @@ sub main {
 
     send_tracking_information('finished');
 
-    if ($create_binary_bundle) {
-        create_binary_bundle();
-    }
-
     my $install_time = time() - $start_time;
     my $pretty_install_time_in_minutes = sprintf("%.2f", $install_time / 60);
 
     print "We have built project in $pretty_install_time_in_minutes minutes\n";
-}
-
-sub create_binary_bundle {
-    chdir $temp_folder_for_building_project;
-    chdir "fastnetmon";
-
-    my $bundle_version = '';
-
-    if ($we_use_code_from_master) {
-        my $git_last_commit_id = `git log --format="%H" -n 1`;
-        chomp $git_last_commit_id;
-
-        $bundle_version = "git-$git_last_commit_id";
-    } else {
-        $bundle_version = $stable_branch_name;
-    }
-
-    my $bundle_file_name = "fastnetmon-binary-$bundle_version-$distro_type-$distro_version-$distro_architecture.tar.gz";
-    my $full_bundle_path = "/tmp/$bundle_file_name";
-
-    print "We will create bundle with name $bundle_file_name\n";
-
-    exec_command("$temp_folder_for_building_project/fastnetmon/src/scripts/build_libary_bundle.pl $full_bundle_path");
-    print "You could download bundle here $full_bundle_path\n";
-
-    if ($distro_type eq 'ubuntu' or $distro_type eq 'debian') {
-        print "We could build .deb packages for this OS\n";
-        exec_command("perl $temp_folder_for_building_project/fastnetmon/src/scripts/build_any_package.pl deb $full_bundle_path");
-    } 
-
-    if ($distro_type eq 'centos') {
-        print "We could build .rpm packages for this OS\n";
-        exec_command("perl $temp_folder_for_building_project/fastnetmon/src/scripts/build_any_package.pl rpm $full_bundle_path");
-    }
-}
-
-sub send_tracking_information {
-    my $step = shift;
-
-    unless ($do_not_track_me) {
-        my $stats_url = "http://178.62.227.110/new_fastnetmon_installation";
-        my $post_data = "distro_type=$distro_type&os_type=$os_type&distro_version=$distro_version&distro_architecture=$distro_architecture&step=$step&we_use_code_from_master=$we_use_code_from_master&user_email=$user_email";
-        my $user_agent = 'FastNetMon install tracker v1';
-
-        `wget --post-data="$post_data" --user-agent="$user_agent" -q '$stats_url'`;
-    }
 }
 
 sub exec_command {
@@ -475,169 +540,6 @@ sub install_binary_gcc {
     return 1;
 }
 
-sub install_gcc {
-    my $result = install_binary_gcc();
-
-    # Add new compiler to configure options
-    # It's mandatory for log4cpp
-    $configure_options = "CC=/opt/gcc520/bin/gcc CXX=/opt/gcc520/bin/g++";
-
-    # More detailes about jam lookup: http://www.boost.org/build/doc/html/bbv2/overview/configuration.html
-
-    # We use non standard gcc compiler for Boost builder and Boost and specify it this way
-    open my $fl, ">", "/root/user-config.jam" or die "Can't open $! file for writing manifest\n";
-    print {$fl} "using gcc : 5.2 : /opt/gcc520/bin/g++ ;\n";
-    close $fl;
-
-    # When we run it with vzctl exec we ahve broken env and should put config in /etc too
-    open my $etcfl, ">", "/etc/user-config.jam" or die "Can't open $! file for writing manifest\n";
-    print {$etcfl} "using gcc : 5.2 : /opt/gcc520/bin/g++ ;\n";
-    close $etcfl; 
-
-    # Install gcc from sources
-    if ($distro_type eq 'debian') {
-        my @dependency_list = ('libmpfr-dev', 'libmpc-dev');
-
-        if ($distro_version <= 7) {
-            # We have another name for Debian 6 Squeeze
-            push @dependency_list, 'libgmp3-dev';
-        } else {
-            push @dependency_list, 'libgmp-dev';
-        }
-
-        apt_get(@dependency_list);
-    } elsif ($distro_type eq 'ubuntu') {
-        my @dependency_list = ('libmpfr-dev', 'libmpc-dev', 'libgmp-dev');
-
-        apt_get(@dependency_list);
-    } elsif ($distro_type eq 'centos') {
-        if ($distro_version == 6) { 
-            # We haven't libmpc in base repository here and should enable EPEL
-            yum('https://dl.fedoraproject.org/pub/epel/epel-release-latest-6.noarch.rpm');
-        }    
-
-        my @dependency_list = ('gmp-devel', 'mpfr-devel', 'libmpc-devel');
-
-        yum(@dependency_list);
-    } 
-
-    # Please be careful! This libs required for binary version of gcc! We should install they!
-    # Do not call source compilation in this case
-    if ($result) {
-        return;
-    }    
-
-    print "Download gcc archive\n";
-    chdir $temp_folder_for_building_project;
-
-    my $archive_file_name = 'gcc-5.2.0.tar.gz';
-    my $gcc_download_result = download_file("ftp://ftp.mpi-sb.mpg.de/pub/gnu/mirror/gcc.gnu.org/pub/gcc/releases/gcc-5.2.0/$archive_file_name", $archive_file_name, '713211883406b3839bdba4a22e7111a0cff5d09b');
-
-    unless ($gcc_download_result) {
-        die "Can't download gcc sources\n";
-    }
-
-    print "Unpack archive\n";
-    exec_command("tar -xf $archive_file_name");
-    exec_command("mkdir $temp_folder_for_building_project/gcc-5.2.0-objdir");
-
-    chdir "$temp_folder_for_building_project/gcc-5.2.0-objdir";
-
-    print "Configure build system\n";
-    exec_command("$temp_folder_for_building_project/gcc-5.2.0/configure --prefix=/opt/gcc520 --enable-languages=c,c++ --disable-multilib");
-
-    print "Build gcc\n";
-    exec_command("make $make_options");
-    exec_command("make $make_options install");
-
-    # We do not add it to ld.so.conf.d path because it could broke system
-}
-
-sub install_boost {
-    chdir '/opt';
-    my $archive_file_name = 'boost_1_58_0.tar.gz';
-
-    print "Install Boost dependencies\n";
-
-    # libicu dependencies
-    if ($distro_type eq 'ubuntu') {
-
-        if ($distro_version eq '14.04') {
-            apt_get('libicu52');
-        }
-
-        if ($distro_version eq '12.04') {
-            apt_get('libicu48');
-        }
-    }
-
-    print "Download Boost source code\n";
-    my $boost_download_result = download_file("http://downloads.sourceforge.net/project/boost/boost/1.58.0/boost_1_58_0.tar.gz?r=http%3A%2F%2Fwww.boost.org%2Fusers%2Fhistory%2Fversion_1_58_0.html&ts=1439207367&use_mirror=cznic", $archive_file_name, 'a27b010b9d5de0c07df9dddc9c336767725b1e6b');
-
-    unless ($boost_download_result) {
-        die "Can't download Boost source code\n";
-    }
-
-    print "Unpack Boost source code\n";
-    exec_command("tar -xf $archive_file_name");
-    
-    # Remove archive
-    unlink "$archive_file_name";
-
-    chdir "boost_1_58_0";
-
-    print "Build Boost\n";
-    # We have troubles when run this code with vzctl exec so we should add custom compiler in path 
-    # So without HOME=/root nothing worked correctly due to another "openvz" feature
-    my $b2_build_result = exec_command("HOME=/root PATH=\$PATH:/opt/gcc520/bin /opt/boost_build1.5.8/bin/b2 -j$cpus_number --build-dir=/tmp/boost_build_temp_directory_1_5_8 toolset=gcc-5.2 link=shared --without-test --without-python --without-wave --without-graph --without-coroutine --without-math --without-log --without-graph_parallel --without-mpi"); 
-
-    # We should not do this check because b2 build return bad return code even in success case... when it can't build few non important targets
-    unless ($b2_build_result) {
-        ### die "Can't execute b2 build correctly\n";
-    }
-}
-
-sub install_boost_builder { 
-    chdir $temp_folder_for_building_project;
-
-    # We need libc headers for compilation of this code
-    if ($distro_type eq 'centos') {
-        yum('glibc-devel');
-    }
-
-    # We use another name because it uses same name as boost distribution
-    my $archive_file_name = 'boost-builder-1.58.0.tar.gz';
-
-    print "Download boost builder\n";
-    my $boost_build_result = download_file("https://github.com/boostorg/build/archive/boost-1.58.0.tar.gz", $archive_file_name,
-        'e86375ed83ed07a79a33c76e80e8648d969b3218');
-
-    unless ($boost_build_result) {
-        die "Can't download boost builder\n";
-    }
-
-    print "Unpack boost builder\n";
-    exec_command("tar -xf $archive_file_name");
-
-    chdir "build-boost-1.58.0";
-
-    print "Build Boost builder\n";
-    # We haven't system compiler here and we will use custom gcc for compilation here
-    my $bootstrap_result = exec_command("CC=/opt/gcc520/bin/gcc CXX=/opt/gcc520/bin/g++ ./bootstrap.sh --with-toolset=cc");
-
-    unless ($bootstrap_result) {
-        die "bootstrap of Boost Builder failed, please check logs\n";
-    }
-
-    # We should specify toolset here if we want to do build with custom compiler
-    # We have troubles when run this code with vzctl exec so we should add custom compiler in path 
-    my $b2_install_result = exec_command("PATH=\$PATH:/opt/gcc520/bin ./b2 install --prefix=/opt/boost_build1.5.8 toolset=gcc");
-    
-    unless ($b2_install_result) {
-        die "Can't execute b2 install\n";
-    }
-}
-
 sub install_luajit {
     chdir $temp_folder_for_building_project;
 
@@ -652,7 +554,7 @@ sub install_luajit {
     ); 
 
     unless ($luajit_download_result) {
-        die "Can't download luajit\n";
+        fast_die("Can't download luajit");
     }
 
     print "Unpack Luajit\n";
@@ -695,7 +597,7 @@ sub install_lua_lpeg {
         $archive_file_name, '69eda40623cb479b4a30fb3720302d3a75f45577'); 
 
     unless ($lpeg_download_result) {
-        die "Can't download lpeg\n";
+        fast_die("Can't download lpeg");
     }
 
     exec_command("tar -xf lpeg-0.12.2.tar.gz");
@@ -728,7 +630,7 @@ sub install_json_c {
         'b33872f8b2837c7909e9bd8734855669c57a67ce');
 
     unless ($json_c_download_result) {
-        die "Can't download json-c sources\n";
+        fast_die("Can't download json-c sources");
     }
     
     print "Uncompress it\n";       
@@ -771,7 +673,7 @@ sub install_lua_json {
         '53455f697c3f1d7cc955202062e97bbafbea0779');
 
     unless ($lua_json_download_result) {
-        die "Can't download lua json\n";
+        fast_die("Can't download lua json");
     }
 
     exec_command("tar -xf $archive_file_name");
@@ -784,11 +686,28 @@ sub install_lua_json {
 
 sub install_init_scripts {
     # Init file for any systemd aware distro
-    if ( ($distro_type eq 'debian' && $distro_version > 7) or ($distro_type eq 'centos' && $distro_version >= 7) ) {
-        my $systemd_service_path = "/etc/systemd/system/fastnetmon.service";
-        exec_command("cp $fastnetmon_code_dir/fastnetmon.service $systemd_service_path");
+    my $systemd_distro = '';
 
-        exec_command("sed -i 's#/usr/sbin/fastnetmon#/opt/fastnetmon/fastnetmon#' $systemd_service_path");
+    # All new versions of Debian use systemd
+    if ($distro_type eq 'debian' && $distro_version > 7) {
+        $systemd_distro = 1;
+    }
+
+    # All new versions of CentOS/RHEL use systemd
+    if ($distro_type eq 'centos' && $distro_version >= 7) {
+        $systemd_distro = 1;
+    }
+
+    # Some heuristic approach for Debian-like distros
+    if (-e "/bin/systemd") {
+        $systemd_distro = 1;
+    }
+
+    if ($systemd_distro) {
+        my $systemd_service_path = "/etc/systemd/system/fastnetmon.service";
+        exec_command("cp $fastnetmon_code_dir/fastnetmon.service.in $systemd_service_path");
+
+        exec_command("sed -i 's#\@CMAKE_INSTALL_SBINDIR\@#/opt/fastnetmon#' $systemd_service_path");
 
         print "We found systemd enabled distro and created service: fastnetmon.service\n";
         print "You could run it with command: systemctl start fastnetmon.service\n";
@@ -856,7 +775,7 @@ sub install_log4cpp {
     my $log4cpp_download_result = download_file($log4cpp_url, $distro_file_name, '23aa5bd7d6f79992c92bad3e1c6d64a34f8fcf68');
 
     unless ($log4cpp_download_result) {
-        die "Can't download log4cpp\n";
+        fast_die("Can't download log4cpp");
     }
 
     print "Unpack log4cpp sources\n";
@@ -865,12 +784,18 @@ sub install_log4cpp {
 
     print "Build log4cpp\n";
 
+    my $configure_res = '';
+
     # TODO: we need some more reliable way to specify options here
     if ($configure_options) {
-        exec_command("$configure_options ./configure --prefix=$log4cpp_install_path");
+        $configure_res = exec_command("$configure_options ./configure --prefix=$log4cpp_install_path");
     } else {
-        exec_command("./configure --prefix=$log4cpp_install_path");
-    }    
+        $configure_res = exec_command("./configure --prefix=$log4cpp_install_path");
+    }
+
+    if (!$configure_res) {
+        fast_die("Cannot configure log4cpp");
+    }
 
     exec_command("make $make_options install"); 
 
@@ -914,7 +839,7 @@ sub install_gobgp {
         $distro_file_name, 'daafc31b06d95611ca76f45630e5db140ba5d4c9');
 
     unless ($gobgp_download_result) {
-        die "Can't download gobgp sources\n";
+        fast_die("Can't download gobgp sources");
     }
 
     exec_command("tar -xf $distro_file_name");
@@ -961,14 +886,14 @@ sub install_golang {
         $distro_file_name = 'go1.5.1.linux-386.tar.gz';
         $distro_file_hash = '6ce7328f84a863f341876658538dfdf10aff86ee';
     } else {
-        die "We haven't golang for your platform sorry :(\n";
+        fast_die("We haven't golang for your platform sorry :(");
     }
 
     my $golang_download_result = download_file("https://storage.googleapis.com/golang/$distro_file_name",
         $distro_file_name, $distro_file_hash); 
 
     unless ($golang_download_result) {
-        die "Can't download golanguage\n";
+        fast_die("Can't download golanguage");
     }
 
     exec_command("tar -C /usr/local -xzf $distro_file_name");
@@ -991,7 +916,7 @@ sub install_protobuf {
         $distro_file_name, 'd23048ba3218af21ba65fa39bfb6326f5bf9f7a4'); 
 
     unless ($protobuf_download_result) {
-        die "Can't download protobuf\n";
+        fast_die("Can't download protobuf");
     }
 
     print "Unpack protocol buffers\n";
@@ -1018,7 +943,7 @@ sub install_mongo_client {
         $distro_file_name, '32452481be64a297e981846e433b2b492c302b34');
     
     unless ($mongo_download_result) {
-        die "Can't download mongo\n";
+        fast_die("Can't download mongo");
     }
 
     exec_command("tar -xf $distro_file_name");
@@ -1040,7 +965,7 @@ sub install_hiredis {
         $disto_file_name, '737c4ed101096c5ec47fcaeba847664352d16204');
 
     unless ($hiredis_download_result) {
-        die "Can't download hiredis\n";
+        fast_die("Can't download hiredis");
     }
 
     exec_command("tar -xf $disto_file_name");
@@ -1112,7 +1037,7 @@ sub put_library_path_to_ld_so {
         return;
     }
 
-    open my $ld_so_conf_handle, ">", $ld_so_file_path or die "Can't open file $ld_so_file_path $! for writing\n";
+    open my $ld_so_conf_handle, ">", $ld_so_file_path or fast_die("Can't open file $ld_so_file_path $! for writing");
     print {$ld_so_conf_handle} $library_path;
     close $ld_so_conf_handle;
 
@@ -1239,7 +1164,7 @@ sub detect_distribution {
         }
 
         unless ($distro_type) {
-            die "This distro is unsupported, please do manual install";
+            fast_die("This distro is unsupported, please do manual install");
         }
 
         print "We detected your OS as $distro_type Linux $distro_version\n";
@@ -1339,7 +1264,7 @@ sub install_pf_ring {
         my $pfring_download_result = download_file($pf_ring_url, $pf_ring_archive_path, $pf_ring_sha);
 
         unless ($pfring_download_result) {
-            die "Can't download PF_RING sources\n";
+            fast_die("Can't download PF_RING sources");
         }
  
         my $archive_file_name = $pf_ring_archive_path;
@@ -1426,14 +1351,11 @@ sub install_fastnetmon {
             "liblog4cpp5-dev", "libnuma-dev", "libgeoip-dev","libpcap-dev", "cmake", "pkg-config", "libhiredis-dev",
         );
 
-        # Do not install Boost when we build it manually
-        unless ($build_binary_environment) {
-            # We add this dependencies because package libboost-all-dev is broken on VyOS
-            if ($appliance_name eq 'vyos') {
-                push @fastnetmon_deps, ('libboost-regex-dev', 'libboost-system-dev', 'libboost-thread-dev');
-            } else {
-                push @fastnetmon_deps, "libboost-all-dev";
-            }
+        # We add this dependencies because package libboost-all-dev is broken on VyOS
+        if ($appliance_name eq 'vyos') {
+            push @fastnetmon_deps, ('libboost-regex-dev', 'libboost-system-dev', 'libboost-thread-dev');
+        } else {
+            push @fastnetmon_deps, "libboost-all-dev";
         }
 
         apt_get(@fastnetmon_deps);
@@ -1447,10 +1369,7 @@ sub install_fastnetmon {
             push @fastnetmon_deps, 'net-tools';
         }
 
-        # Do not install Boost when we build it manually
-        unless ($build_binary_environment) {
-            @fastnetmon_deps = (@fastnetmon_deps, 'boost-devel', 'boost-thread')
-        }
+        @fastnetmon_deps = (@fastnetmon_deps, 'boost-devel', 'boost-thread');
 
         yum(@fastnetmon_deps);
     } elsif ($distro_type eq 'gentoo') {
@@ -1483,21 +1402,15 @@ sub install_fastnetmon {
 
         exec_command("git pull");
     } else {
-        # Pull new code
-        if ($we_use_code_from_master) {
-            exec_command("git clone $fastnetmon_git_path --quiet 2>/dev/null");
-        } else {
-            exec_command("git clone $fastnetmon_git_path --quiet 2>/dev/null");
-        }
+        # Pull code
+        exec_command("git clone $fastnetmon_git_path");
 
         if ($? != 0) {
-            die "Can't clone source code\n";
+            fast_die("Can't clone source code");
         }
     }
 
-    if ($we_use_code_from_master) {
-
-    } else {
+    unless ($we_use_code_from_master) {
         # We use this approach because older git versions do not support git clone -b ... correctly
         # warning: Remote branch v1.1.2 not found in upstream origin, using HEAD instead
         chdir "fastnetmon";
@@ -1513,7 +1426,7 @@ sub install_fastnetmon {
         $cmake_params .= " -DDISABLE_PF_RING_SUPPORT=ON";
     }
 
-    if ($distro_type eq 'centos' && $distro_version == 6 && !$build_binary_environment) {
+    if ($distro_type eq 'centos' && $distro_version == 6) {
         # Disable cmake script from Boost package because it's broken:
         # http://public.kitware.com/Bug/view.php?id=15270
         $cmake_params .= " -DBoost_NO_BOOST_CMAKE=BOOL:ON";
@@ -1523,32 +1436,37 @@ sub install_fastnetmon {
         $cmake_params .= " -DENABLE_GOBGP_SUPPORT=ON";
     }
 
-    # We should specify this option if we want to build with custom gcc compiler
-    if ($build_binary_environment) {
-        $cmake_params .= " -DENABLE_BUILD_IN_CPP_11_CUSTOM_ENVIRONMENT=ON ";
-
-        # We should specify compilir this way
-        $cmake_params .= " -DCMAKE_C_COMPILER=/opt/gcc520/bin/gcc -DCMAKE_CXX_COMPILER=/opt/gcc520/bin/g++ "; 
-    }
-
     # Bump version in cmake build system
     if ($use_modern_pf_ring) {
         system("sed -i 's/pf_ring_6.0.3/pf_ring_$pf_ring_version/' ../CMakeLists.txt")
+    }
+
+    # Fix dependencies for Netmap in 1.1.4
+    if ($distro_type eq 'centos' && int($distro_version) == 6) {
+        system("sed -i 's/netmap_plugin fastnetmon_packet_parser/netmap_plugin fastnetmon_packet_parser unified_parser/' ../CMakeLists.txt")
+    }
+
+    # We do not need LUA by default
+    unless ($we_have_luajit_support) {
+        $cmake_params .= " -DENABLE_LUA_SUPPORT=OFF ";
     }
 
     if (defined($ENV{'TRAVIS'}) && $ENV{'TRAVIS'}) {
         system("cmake .. $cmake_params");
         system("make $make_options");
     } else {
-        system("cmake .. $cmake_params");
-        system("make $make_options");
+        print "Run cmake to generate make file\n";
+        system("cmake .. $cmake_params 2>&1 | tee -a $install_log_path");
+
+        print "Run make to build FastNetMon\n";
+        system("make $make_options 2>&1 | tee -a $install_log_path");
     }
 
     my $fastnetmon_dir = "/opt/fastnetmon";
     my $fastnetmon_build_binary_path = "$fastnetmon_code_dir/build/fastnetmon";
 
     unless (-e $fastnetmon_build_binary_path) {
-        die "Can't build fastnetmon!";
+        fast_die("Can't build fastnetmon!");
     }
 
     mkdir $fastnetmon_dir;
@@ -1565,22 +1483,6 @@ sub install_fastnetmon {
     unless (-e $fastnetmon_config_path) {
         print "Create stub configuration file\n";
         exec_command("cp $fastnetmon_code_dir/fastnetmon.conf $fastnetmon_config_path");
-  
-        # netmap will detach interface completely and will broke network
-        # So we do not configure it automatically 
-        if ($os_type ne 'freebsd') { 
-            my @interfaces = get_active_network_interfaces();
-            my $interfaces_as_list = join ',', @interfaces;
-            print "Select $interfaces_as_list as active interfaces\n";
-
-            print "Tune config\n";
-
-            if ($os_type eq 'macosx' or $os_type eq 'freebsd') {
-                exec_command("sed -i -e 's/interfaces.*/interfaces = $interfaces_as_list/' $fastnetmon_config_path");
-            } else {
-                exec_command("sed -i 's/interfaces.*/interfaces = $interfaces_as_list/' $fastnetmon_config_path");
-            }
-        }
     }
 
     print "If you have any issues, please check /var/log/fastnetmon.log file contents\n";
@@ -1592,23 +1494,5 @@ sub install_fastnetmon {
     unless ($init_script_result) {
         print "You can run fastnetmon with command: $fastnetmon_dir/fastnetmon\n";
     }
-}
-
-sub get_active_network_interfaces {
-    my @interfaces = `LANG=C netstat -i|egrep -v 'lo|Iface|Kernel'|awk '{print \$1}'`;
-    chomp @interfaces;
-
-    my @clean_interfaces = ();
-
-    for my $iface (@interfaces) {
-        # skip aliases
-        if ($iface =~ /:/) {
-            next;
-        }
-
-        push @clean_interfaces, $iface;
-    }
-
-    return  @clean_interfaces;
 }
 
