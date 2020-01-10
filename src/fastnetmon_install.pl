@@ -205,7 +205,12 @@ sub install_additional_repositories {
         if ($distro_version == 7) {
             print "Install EPEL repository for your system\n"; 
             yum('https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm');
-        } 
+        }
+
+        if ($distro_version == 8) {
+            print "Install EPEL repository for your system\n";
+            yum('https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm');
+        }
     }
 }
 
@@ -646,7 +651,7 @@ sub install_json_c {
         exec_command("sed -i '360 s#^#//#' json_tokener.c");
         
         # Workaround complaints from fresh compilers
-        if ($distro_type eq 'ubuntu' && $distro_version eq '18.04') {
+        if ( ($distro_type eq 'ubuntu' && $distro_version eq '18.04') or ($distro_type eq 'centos' && $distro_version eq '8')) {
             exec_command("sed -i -e '381 s/AM_CFLAGS =/AM_CFLAGS = -Wimplicit-fallthrough=0/ ' Makefile.in");
         }
     }
